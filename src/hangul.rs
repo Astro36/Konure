@@ -77,6 +77,35 @@ pub fn assemble_chars(v: Vec<Vec<u32>>) -> Result<Vec<u32>, ()> {
     v.into_iter().map(|codes| assemble(codes)).collect()
 }
 
+pub fn assemble_consonant(consonant_codes: (u32, u32)) -> Result<u32, ()> {
+    match consonant_codes {
+        (12593, 12613) => Ok(12595),
+        (12596, 12616) => Ok(12597),
+        (12601, 12593) => Ok(12602),
+        (12601, 12609) => Ok(12603),
+        (12601, 12610) => Ok(12604),
+        (12601, 12613) => Ok(12605),
+        (12601, 12620) => Ok(12606),
+        (12601, 12621) => Ok(12607),
+        (12601, 12622) => Ok(12608),
+        (12610, 12613) => Ok(12612),
+        _ => Err(()),
+    }
+}
+
+pub fn assemble_vowel(vowel_codes: (u32, u32)) -> Result<u32, ()> {
+    match vowel_codes {
+        (12631, 12623) => Ok(12632),
+        (12631, 12624) => Ok(12633),
+        (12631, 12643) => Ok(12634),
+        (12636, 12627) => Ok(12637),
+        (12636, 12628) => Ok(12638),
+        (12636, 12643) => Ok(12639),
+        (12641, 12643) => Ok(12642),
+        _ => Err(()),
+    }
+}
+
 pub fn disassemble(syllable_code: u32) -> Result<Vec<u32>, ()> {
     if is_hangul_complete(syllable_code) {
         let code = syllable_code - 44032;
@@ -97,6 +126,35 @@ pub fn disassemble(syllable_code: u32) -> Result<Vec<u32>, ()> {
     }
 }
 
+pub fn disassemble_consonant(consonant_code: u32) -> Result<(u32, u32), ()> {
+    match consonant_code {
+        12595 => Ok((12593, 12613)),
+        12597 => Ok((12596, 12616)),
+        12602 => Ok((12601, 12593)),
+        12603 => Ok((12601, 12609)),
+        12604 => Ok((12601, 12610)),
+        12605 => Ok((12601, 12613)),
+        12606 => Ok((12601, 12620)),
+        12607 => Ok((12601, 12621)),
+        12608 => Ok((12601, 12622)),
+        12612 => Ok((12610, 12613)),
+        _ => Err(()),
+    }
+}
+
+pub fn disassemble_vowel(vowel_code: u32) -> Result<(u32, u32), ()> {
+    match vowel_code {
+        12632 => Ok((12631, 12623)),
+        12633 => Ok((12631, 12624)),
+        12634 => Ok((12631, 12643)),
+        12637 => Ok((12636, 12627)),
+        12638 => Ok((12636, 12628)),
+        12639 => Ok((12636, 12643)),
+        12642 => Ok((12641, 12643)),
+        _ => Err(()),
+    }
+}
+
 pub fn is_consonant(code: u32) -> bool {
     match code {
         12593..=12622 => true,
@@ -104,9 +162,23 @@ pub fn is_consonant(code: u32) -> bool {
     }
 }
 
+pub fn is_complex_consonant(code: u32) -> bool {
+    match code {
+        12595 | 12597 | 12602..=12608 | 12612 => true,
+        _ => false,
+    }
+}
+
 pub fn is_vowel(code: u32) -> bool {
     match code {
         12623..=12643 => true,
+        _ => false,
+    }
+}
+
+pub fn is_complex_vowel(code: u32) -> bool {
+    match code {
+        12632..=12634 | 12637..=12639 | 12642 => true,
         _ => false,
     }
 }
@@ -284,8 +356,9 @@ mod tests {
 
     #[test]
     fn it_works() {
-        assert_eq!(2 + 2, 4);
-        // dbg!(hangul::assemble(vec![12596, 12625, 12615]).unwrap());
-        dbg!(hangul::disassemble(45285).unwrap());
+        assert_eq!(
+            hangul::assemble(hangul::disassemble(45285).unwrap()).unwrap(),
+            45285
+        );
     }
 }
