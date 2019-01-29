@@ -51,7 +51,9 @@ pub const COMPLEX_VOWELS: [(char, [char; 2]); 7] = [
 
 pub fn assemble(phoneme_codes: Vec<u32>) -> Result<u32, ()> {
     match phoneme_codes.len() {
+        // ETC
         1 => Ok(phoneme_codes[0]),
+        // Consonant + Vowel
         2 => match (
             consonant_to_choseong_index(phoneme_codes[0]),
             vowel_to_jungseong_index(phoneme_codes[1]),
@@ -59,22 +61,91 @@ pub fn assemble(phoneme_codes: Vec<u32>) -> Result<u32, ()> {
             (Some(cho), Some(jung)) => Ok((44032 + (cho * 588) + (jung * 28)) as u32),
             _ => Err(()),
         },
-        3 => match (
-            consonant_to_choseong_index(phoneme_codes[0]),
-            vowel_to_jungseong_index(phoneme_codes[1]),
-            consonant_to_jongseong_index(phoneme_codes[2]),
-        ) {
-            (Some(cho), Some(jung), Some(jong)) => {
+        // (Consonant + Vowel + Consonant) or (Consonant + Vowel + Vowel)
+        3 => {
+            if is_consonant(phoneme_codes[0])
+                && is_vowel(phoneme_codes[1])
+                && is_consonant(phoneme_codes[2])
+            {
+                let cho = consonant_to_choseong_index(phoneme_codes[0]).unwrap();
+                let jung = vowel_to_jungseong_index(phoneme_codes[1]).unwrap();
+                let jong = consonant_to_jongseong_index(phoneme_codes[2]).unwrap();
                 Ok((44032 + (cho * 588) + (jung * 28) + jong) as u32)
+            } else if is_consonant(phoneme_codes[0])
+                && is_simple_vowel(phoneme_codes[1])
+                && is_simple_vowel(phoneme_codes[2])
+            {
+                let cho = consonant_to_choseong_index(phoneme_codes[0]).unwrap();
+                let jung = vowel_to_jungseong_index(
+                    assemble_vowel((phoneme_codes[1], phoneme_codes[2])).unwrap(),
+                )
+                .unwrap();
+                Ok((44032 + (cho * 588) + (jung * 28)) as u32)
+            } else {
+                Err(())
             }
-            _ => Err(()),
-        },
+        }
+        // (Consonant + Vowel + Consonant + Consonant) or (Consonant + Vowel + Vowel + Consonant)
+        4 => {
+            if is_consonant(phoneme_codes[0])
+                && is_vowel(phoneme_codes[1])
+                && is_simple_consonant(phoneme_codes[2])
+                && is_simple_consonant(phoneme_codes[3])
+            {
+                let cho = consonant_to_choseong_index(phoneme_codes[0]).unwrap();
+                let jung = vowel_to_jungseong_index(phoneme_codes[1]).unwrap();
+                let jong = consonant_to_jongseong_index(
+                    assemble_consonant((phoneme_codes[2], phoneme_codes[3])).unwrap(),
+                )
+                .unwrap();
+                Ok((44032 + (cho * 588) + (jung * 28) + jong) as u32)
+            } else if is_consonant(phoneme_codes[0])
+                && is_simple_vowel(phoneme_codes[1])
+                && is_simple_vowel(phoneme_codes[2])
+                && is_consonant(phoneme_codes[3])
+            {
+                let cho = consonant_to_choseong_index(phoneme_codes[0]).unwrap();
+                let jung = vowel_to_jungseong_index(
+                    assemble_vowel((phoneme_codes[1], phoneme_codes[2])).unwrap(),
+                )
+                .unwrap();
+                let jong = consonant_to_jongseong_index(phoneme_codes[3]).unwrap();
+                Ok((44032 + (cho * 588) + (jung * 28) + jong) as u32)
+            } else {
+                Err(())
+            }
+        }
+        // Consonant + Vowel + Vowel + Consonant + Consonant
+        5 => {
+            if is_consonant(phoneme_codes[0])
+                && is_simple_vowel(phoneme_codes[1])
+                && is_simple_vowel(phoneme_codes[2])
+                && is_simple_consonant(phoneme_codes[3])
+                && is_simple_consonant(phoneme_codes[4])
+            {
+                let cho = consonant_to_choseong_index(phoneme_codes[0]).unwrap();
+                let jung = vowel_to_jungseong_index(
+                    assemble_vowel((phoneme_codes[1], phoneme_codes[2])).unwrap(),
+                )
+                .unwrap();
+                let jong = consonant_to_jongseong_index(
+                    assemble_consonant((phoneme_codes[3], phoneme_codes[4])).unwrap(),
+                )
+                .unwrap();
+                Ok((44032 + (cho * 588) + (jung * 28) + jong) as u32)
+            } else {
+                Err(())
+            }
+        }
         _ => Err(()),
     }
 }
 
-pub fn assemble_chars(v: Vec<Vec<u32>>) -> Result<Vec<u32>, ()> {
-    v.into_iter().map(|codes| assemble(codes)).collect()
+pub fn assemble_chars(phoneme_codes_chars: Vec<Vec<u32>>) -> Result<Vec<u32>, ()> {
+    phoneme_codes_chars
+        .into_iter()
+        .map(|phoneme_codes| assemble(phoneme_codes))
+        .collect()
 }
 
 pub fn assemble_consonant(consonant_codes: (u32, u32)) -> Result<u32, ()> {
@@ -126,6 +197,50 @@ pub fn disassemble(syllable_code: u32) -> Result<Vec<u32>, ()> {
     }
 }
 
+pub fn deep_disassemble(syllable_code: u32) -> Result<Vec<u32>, ()> {
+    if is_hangul_complete(syllable_code) {
+        let code = syllable_code - 44032;
+        let cho = (code / 28) / 21;
+        let jung = (code / 28) % 21;
+        let jong = code % 28;
+        match (
+            choseong_index_to_consonant(cho as usize),
+            jungseong_index_to_vowel(jung as usize),
+            jongseong_index_to_consonant(jong as usize),
+        ) {
+            (Some(cho), Some(jung), Some(jong)) => {
+                match (disassemble_vowel(jung), disassemble_consonant(jong)) {
+                    (Ok((jung0, jung1)), Ok((jong0, jong1))) => Ok(vec![cho, jung0, jung1, jong0, jong1]),
+                    (Ok((jung0, jung1)), Err(())) => Ok(vec![cho, jung0, jung1, jong]),
+                    (Err(()), Ok((jong0, jong1))) => Ok(vec![cho, jung, jong0, jong1]),
+                    (Err(()), Err(())) => Ok(vec![cho, jung, jong]),
+                }
+            }
+            (Some(cho), Some(jung), None) => match disassemble_vowel(jung) {
+                Ok((jung0, jung1)) => Ok(vec![cho, jung0, jung1]),
+                Err(()) => Ok(vec![cho, jung]),
+            },
+            _ => Err(()),
+        }
+    } else {
+        Ok(vec![syllable_code])
+    }
+}
+
+pub fn disassemble_chars(syllable_code_chars: Vec<u32>) -> Result<Vec<Vec<u32>>, ()> {
+    syllable_code_chars
+        .into_iter()
+        .map(|syllable_code| disassemble(syllable_code))
+        .collect()
+}
+
+pub fn deep_disassemble_chars(syllable_code_chars: Vec<u32>) -> Result<Vec<Vec<u32>>, ()> {
+    syllable_code_chars
+        .into_iter()
+        .map(|syllable_code| deep_disassemble(syllable_code))
+        .collect()
+}
+
 pub fn disassemble_consonant(consonant_code: u32) -> Result<(u32, u32), ()> {
     match consonant_code {
         12595 => Ok((12593, 12613)),
@@ -162,6 +277,13 @@ pub fn is_consonant(code: u32) -> bool {
     }
 }
 
+pub fn is_simple_consonant(code: u32) -> bool {
+    match code {
+        12593..=12594 | 12596 | 12598..=12601 | 12609..=12611 | 12613..=12622 => true,
+        _ => false,
+    }
+}
+
 pub fn is_complex_consonant(code: u32) -> bool {
     match code {
         12595 | 12597 | 12602..=12608 | 12612 => true,
@@ -172,6 +294,13 @@ pub fn is_complex_consonant(code: u32) -> bool {
 pub fn is_vowel(code: u32) -> bool {
     match code {
         12623..=12643 => true,
+        _ => false,
+    }
+}
+
+pub fn is_simple_vowel(code: u32) -> bool {
+    match code {
+        12623..=12631 | 12635..=12636 | 12640..=12641 | 12643 => true,
         _ => false,
     }
 }
@@ -359,6 +488,10 @@ mod tests {
         assert_eq!(
             hangul::assemble(hangul::disassemble(45285).unwrap()).unwrap(),
             45285
+        );
+        assert_eq!(
+            hangul::assemble(hangul::deep_disassemble(48577).unwrap()).unwrap(),
+            48577
         );
     }
 }
